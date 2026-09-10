@@ -1,0 +1,11 @@
+# Default prototype configuration (values are deliberately site-agnostic).
+seed: 20260910
+scenario_count: 3000
+safe_fraction: 0.90
+node_count: 12  # larger synthetic pretraining topology; deployment contract remains arbitrary-size
+time_steps: 90
+time_step_days: 1.0
+noise:
+  tilt_deg_std: 0.015
+  vibration_std: 0.08
+  displacement_mm_std: 0.7
