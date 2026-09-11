@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 from pignn.datagen.scenario_generator import GenerationConfig, generate_scenario
 from pignn.graph.build_graph import physics_edges, scenario_to_pyg
 
@@ -17,4 +18,6 @@ def test_scenario_becomes_pyg_data_with_masked_insar():
     assert data.feature_mask.shape == data.x.shape
     assert data.edge_index.shape == (2, 12)
     assert data.edge_attr.shape == (12, 1)
+    assert data.node_y.shape == (4,)
+    assert torch.all((data.node_y >= 0) & (data.node_y <= 1))
     assert data.feature_mask[:, :, 5].sum() == 0  # no InSAR is intentionally no-data, never zero

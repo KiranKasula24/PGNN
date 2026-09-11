@@ -46,6 +46,11 @@ class PIGNNTrainingResult:
     final_loss: float
 
 
+def _node_severity_loss(node_logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+    """Synthetic per-node targets are continuous severity, not binary classes."""
+    return nn.functional.smooth_l1_loss(torch.sigmoid(node_logits), targets)
+
+
 def overfit_tiny_batch(graphs: list[Data], epochs: int = 500, learning_rate: float = 0.02) -> tuple[PIGNN, PIGNNTrainingResult]:
     """Mandatory Phase 5 test: a tiny labelled batch must be learnable."""
     if not graphs:
@@ -57,14 +62,15 @@ def overfit_tiny_batch(graphs: list[Data], epochs: int = 500, learning_rate: flo
     batch = Batch.from_data_list(graphs)
     targets = batch.y.flatten()
     def loss_value() -> torch.Tensor:
-        return loss_fn(model(batch)[1], targets)
+        node_logits, graph_logits, _ = model(batch)
+        return loss_fn(graph_logits, targets) + _node_severity_loss(node_logits, batch.node_y)
     initial = float(loss_value().detach())
     for _ in range(epochs):
         optimizer.zero_grad(); loss = loss_value(); loss.backward(); optimizer.step()
     return model, PIGNNTrainingResult(initial, float(loss_value().detach()))
 
 
-def train_validation_split(graphs: list[Data], epochs: int = 20, learning_rate: float = 0.001, batch_size: int = 32, validation_fraction: float = 0.2) -> tuple[PIGNN, dict]:
+def train_validation_split(graphs: list[Data], epochs: int = 20, learning_rate: float = 0.001, batch_size: int = 32, validation_fraction: float = 0.2, hidden_size: int = 32) -> tuple[PIGNN, dict]:
     """Pretrain on synthetic graphs, preserving scenario-specific PIM edges in batches."""
     if len(graphs) < 2:
         raise ValueError("at least two graphs are required")
@@ -73,7 +79,7 @@ def train_validation_split(graphs: list[Data], epochs: int = 20, learning_rate: 
     split = max(1, int(len(graphs) * (1 - validation_fraction)))
     train_graphs = [graphs[index] for index in order[:split]]
     validation_graphs = [graphs[index] for index in order[split:]]
-    model = PIGNN(graphs[0].x.shape[-1])
+    model = PIGNN(graphs[0].x.shape[-1], hidden_size=hidden_size)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     positives = sum(float(graph.y.item()) for graph in train_graphs)
     loss_fn = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(max(1.0, (len(train_graphs) - positives) / max(positives, 1))))
@@ -82,13 +88,14 @@ def train_validation_split(graphs: list[Data], epochs: int = 20, learning_rate: 
         for start in range(0, len(train_graphs), batch_size):
             batch = Batch.from_data_list(train_graphs[start:start + batch_size])
             optimizer.zero_grad()
-            _, graph_logits, normalized_rate = model(batch)
+            node_logits, graph_logits, normalized_rate = model(batch)
             # Index 3 is displacement_filt in the frozen default registry.
             displacement = batch.x[:, :, 3]
             target_rate = torch.diff(displacement, dim=1, prepend=displacement[:, :1]) / model.rate_scale_mm_per_day
             valid = batch.feature_mask[:, :, 3]
             rate_loss = (((normalized_rate - target_rate) ** 2) * valid).sum() / valid.sum().clamp_min(1)
-            loss = loss_fn(graph_logits, batch.y.flatten()) + 0.1 * rate_loss
+            node_loss = _node_severity_loss(node_logits, batch.node_y)
+            loss = loss_fn(graph_logits, batch.y.flatten()) + node_loss + 0.1 * rate_loss
             loss.backward(); optimizer.step()
     def evaluate(items: list[Data]) -> float:
         model.eval(); losses = []

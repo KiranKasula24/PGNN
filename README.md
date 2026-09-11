@@ -35,3 +35,13 @@ The Phase 5 PIGNN applies those fixed physics edges in each temporal slice,
 then uses a GRU for time evolution. It has severity and deformation-rate heads.
 Phase 6 uses MC-dropout rate trajectories with guarded Fukuzono extrapolation;
 an unavailable estimate remains `null`, never an invented date.
+
+## Known prototype boundaries
+
+Kalman Q/R and virtual sensor noise are provisional until hardware stillness
+tests yield measured R values. `risk_score` is a clearly named temporary rate
+heuristic, not the firmware's calibrated Fuzzy Risk Index. Tilt proxies also
+need replacement with a calibrated spatial/IMU forward model. Phase 7 serving,
+Phase 8 real-data fine-tuning, and Phase 9 InSAR calibration are intentionally
+not implemented. Use `scripts/evaluate_two_node_transfer.py` to assess the
+larger-array pretrained model on a synthetic 2-node, realistic-spacing topology.

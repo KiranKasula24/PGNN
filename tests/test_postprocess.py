@@ -25,6 +25,13 @@ def test_postprocess_returns_fixed_time_threshold_shape():
     assert threshold.confidence == 1.0
 
 
+def test_nearly_flat_rates_are_classified_stable_with_tolerance():
+    time = np.arange(10.0)
+    rates = np.stack([np.full_like(time, 2.0) + 1e-6 * time, np.full_like(time, 2.0) - 1e-6 * time])
+    trend, _ = postprocess(time, rates)
+    assert trend == "stable"
+
+
 def test_model_adapter_returns_api_time_threshold_shape():
     scenario = generate_scenario(np.random.default_rng(4), GenerationConfig(node_count=3, time_steps=8))
     graph = scenario_to_pyg(scenario, window_size=8)

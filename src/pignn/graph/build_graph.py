@@ -30,10 +30,12 @@ def scenario_to_pyg(scenario: dict, window_size: int = 30, registry: FeatureRegi
     geometry, params = scenario["panel_geometry"], scenario["pim_parameters"]
     edge_index, edge_attr = physics_edges(positions, geometry["depth_m"], params["tan_major_influence_angle"])
     label = scenario.get("label") or {}
+    node_severity = label.get("node_severity_0_to_1", {})
     return Data(
         x=torch.from_numpy(values), feature_mask=torch.from_numpy(mask), pos=torch.from_numpy(positions),
         edge_index=edge_index, edge_attr=edge_attr,
         y=torch.tensor([float(label.get("subsidence_occurred", False))], dtype=torch.float32),
+        node_y=torch.tensor([float(node_severity.get(str(node["node_id"]), 0.0)) for node in nodes], dtype=torch.float32),
         node_ids=torch.tensor([node["node_id"] for node in nodes], dtype=torch.long),
         feature_names=list(registry.names), scenario_id=scenario["scenario_id"],
     )

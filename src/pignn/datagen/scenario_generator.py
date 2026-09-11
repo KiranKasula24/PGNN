@@ -16,6 +16,7 @@ class GenerationConfig:
     time_step_days: float = 1.0
     dangerous_fraction: float = 0.10
     threshold_mm: float = 100.0
+    node_spacing_m: float | None = None
     noise: SensorNoise = SensorNoise()
 
 
@@ -27,6 +28,8 @@ def generate_scenario(rng: np.random.Generator, config: GenerationConfig = Gener
     params = PIMParameters(float(rng.uniform(0.55, 0.8) if dangerous else rng.uniform(0.01, 0.025)), float(rng.uniform(1.4, 2.3)), float(rng.uniform(-10, 10)))
     time_rate = float(rng.uniform(0.035, 0.09))
     positions = rng.uniform([-300, -300], [300, 300], size=(config.node_count, 2))
+    if config.node_count == 2 and config.node_spacing_m is not None:
+        positions = np.array([[-config.node_spacing_m / 2, 0.0], [config.node_spacing_m / 2, 0.0]])
     times = np.arange(config.time_steps, dtype=float) * config.time_step_days
     final = basin_subsidence_mm(positions[:, 0], positions[:, 1], panel, params)
     true = progression(times, time_rate)[:, None] * final[None, :]
@@ -41,5 +44,5 @@ def generate_scenario(rng: np.random.Generator, config: GenerationConfig = Gener
         "node_positions": [{"node_id": i + 1, "x_m": float(p[0]), "y_m": float(p[1]), "position_type": "synthetic"} for i, p in enumerate(positions)],
         "panel_geometry": asdict(panel), "pim_parameters": asdict(params), "knothe_rate_per_day": time_rate,
         "time_series": time_series,
-        "label": {"subsidence_occurred": bool(max_mm >= config.threshold_mm), "max_subsidence_mm": max_mm, "time_to_threshold_days": float(times[reached[0]]) if len(reached) else None},
+        "label": {"subsidence_occurred": bool(max_mm >= config.threshold_mm), "max_subsidence_mm": max_mm, "time_to_threshold_days": float(times[reached[0]]) if len(reached) else None, "node_severity_0_to_1": {str(index + 1): float(np.clip(value / config.threshold_mm, 0, 1)) for index, value in enumerate(final)}},
     }

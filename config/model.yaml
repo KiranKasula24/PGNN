@@ -1,4 +1,4 @@
-model: baseline_mlp
+model: pignn_gcn_gru
 hidden_size: 32
 feature_window_days: 30
 target: subsidence_occurred

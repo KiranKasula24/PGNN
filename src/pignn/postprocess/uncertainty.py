@@ -6,6 +6,7 @@ from .fukuzono import inverse_velocity_forecast
 
 
 def uncertainty_range(time_days: np.ndarray, rate_samples_mm_per_day: np.ndarray, lower_quantile: float = 0.1, upper_quantile: float = 0.9) -> dict:
+    """Return an interval; confidence is forecast-valid sample fraction, not probability calibration."""
     samples = np.asarray(rate_samples_mm_per_day, dtype=float)
     if samples.ndim != 2:
         raise ValueError("rate_samples_mm_per_day must be [sample, time]")
