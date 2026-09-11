@@ -9,6 +9,7 @@ def test_generated_schema_and_source():
     validate_scenario(scenario)
     assert scenario["source"] == "synthetic"
     assert len(scenario["time_series"]) == 4
+    assert "fuzzy_risk_index" in scenario["time_series"]["1"][0]
 
 
 def test_class_imbalance_is_deliberate_and_within_bounds():

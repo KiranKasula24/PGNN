@@ -1,7 +1,7 @@
 # PIGNN ML service
 
 FastAPI service and synthetic-data foundation for the mine-subsidence PIGNN.
-Phases 0–6 are implemented: a frozen `/predict` contract stub, validated
+Phases 0–7 are implemented: a checkpoint-backed `/predict` endpoint, validated
 physics simulator, registry-based sensor simulation, versioned synthetic
 Parquet generation, feature/graph conversion, an MLP baseline, a PIM-weighted
 GCN→GRU PIGNN, and uncertainty-aware inverse-velocity post-processing.
@@ -39,9 +39,18 @@ an unavailable estimate remains `null`, never an invented date.
 ## Known prototype boundaries
 
 Kalman Q/R and virtual sensor noise are provisional until hardware stillness
-tests yield measured R values. `risk_score` is a clearly named temporary rate
+tests yield measured R values. `fuzzy_risk_index` is a clearly named temporary rate
 heuristic, not the firmware's calibrated Fuzzy Risk Index. Tilt proxies also
-need replacement with a calibrated spatial/IMU forward model. Phase 7 serving,
-Phase 8 real-data fine-tuning, and Phase 9 InSAR calibration are intentionally
+need replacement with a calibrated spatial/IMU forward model. Phase 8 real-data
+fine-tuning and Phase 9 InSAR calibration are intentionally
 not implemented. Use `scripts/evaluate_two_node_transfer.py` to assess the
 larger-array pretrained model on a synthetic 2-node, realistic-spacing topology.
+
+## Scheduler / Supabase contract
+
+Set `PIGNN_SUPABASE_URL` and `PIGNN_SUPABASE_SERVICE_ROLE_KEY` to enable the
+one-minute worker. It reads `nodes`, `readings`, and `insar_node_features`, then
+inserts directly into `predictions`; it requires no job or queue table. The
+database column `insar_los_velocity_mm` is treated as the agreed LOS displacement
+for an SLC pair and is passed unchanged into the ML displacement feature. Table
+names can be overridden with `PIGNN_SUPABASE_*_TABLE` environment variables.

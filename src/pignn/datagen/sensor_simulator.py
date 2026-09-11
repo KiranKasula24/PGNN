@@ -64,5 +64,5 @@ def simulate_node_readings(field_by_time_mm: np.ndarray, times_days: np.ndarray,
         raw = truth + rng.normal(0, standard_deviation, truth.shape)
         values[filtered_name.replace("_filt", "_raw")] = raw
         values[filtered_name] = filter_1d(raw, KalmanTuning(process_variance=standard_deviation ** 2 * 0.05, measurement_variance=standard_deviation ** 2))
-    values["risk_score"] = provisional_fuzzy_risk_index(values["displacement_filt"], times_days)
+    values["fuzzy_risk_index"] = provisional_fuzzy_risk_index(values["displacement_filt"], times_days)
     return values

@@ -6,4 +6,15 @@ from pignn.service.main import app
 def test_predict_contract_is_stable():
     response = TestClient(app).post("/predict", json={"site_id": "demo", "nodes": [{"node_id": 1, "mock_latitude": 20.0, "mock_longitude": 80.0, "readings": [{"timestamp": datetime.now(timezone.utc).isoformat(), "features": {"displacement_filt": {"value": 1.2, "unit": "mm"}}}]}]})
     assert response.status_code == 200
-    assert response.json() == {"predicted_zone": [{"node_id": 1, "severity_0_to_1": 0.0}], "trend": "stable", "time_to_threshold": {"low_days": None, "high_days": None, "confidence": 0.0}, "model_version": "contract-stub-0.1.0"}
+    body = response.json()
+    assert body["model_version"] == "pignn-0.1.1"
+    assert body["trend"] in {"stable", "accelerating", "decelerating"}
+    assert body["predicted_zone"][0]["node_id"] == 1
+    assert 0 <= body["predicted_zone"][0]["severity_0_to_1"] <= 1
+    assert set(body["time_to_threshold"]) == {"low_days", "high_days", "confidence"}
+
+
+def test_predict_accepts_renamed_insar_feature():
+    now = datetime.now(timezone.utc).isoformat()
+    payload = {"site_id": "demo", "nodes": [{"node_id": 1, "mock_latitude": 20.0, "mock_longitude": 80.0, "readings": [{"timestamp": now, "features": {"insar_los_displacement_mm": {"value": 1.2, "unit": "mm"}, "insar_coherence": {"value": 0.9}}}]}]}
+    assert TestClient(app).post("/predict", json=payload).status_code == 200

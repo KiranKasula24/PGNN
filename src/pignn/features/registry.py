@@ -61,15 +61,15 @@ def _numeric_field(name: str) -> Extractor:
     return extract
 
 
-for _name, _unit in (("tilt_x_filt", "degrees"), ("tilt_y_filt", "degrees"), ("vibration_filt", "hardware-TBD"), ("displacement_filt", "mm"), ("risk_score", "index")):
+for _name, _unit in (("tilt_x_filt", "degrees"), ("tilt_y_filt", "degrees"), ("vibration_filt", "hardware-TBD"), ("displacement_filt", "mm"), ("fuzzy_risk_index", "index")):
     DEFAULT_REGISTRY.register(_name, _unit)(_numeric_field(_name))
 
 
-@DEFAULT_REGISTRY.register("insar_los_displacement_or_velocity_mm", "mm")
+@DEFAULT_REGISTRY.register("insar_los_displacement_mm", "mm")
 def _insar_los(reading: dict) -> tuple[float, bool]:
     """Consume only pre-processed InSAR fields and preserve unavailable values."""
     from .insar_features import InSARSample
-    return InSARSample(reading.get("insar_los_displacement_or_velocity_mm"), reading.get("insar_coherence")).validated()
+    return InSARSample(reading.get("insar_los_displacement_mm"), reading.get("insar_coherence")).validated()
 
 
 DEFAULT_REGISTRY.register("insar_coherence", "0_to_1")(_numeric_field("insar_coherence"))
