@@ -69,3 +69,37 @@ It runs immediately at startup and then every 60 seconds. Deploy this command
 as a long-running worker/web service with exactly one process; multiple Uvicorn
 workers each start a scheduler and would create duplicate prediction rows.
 `GET /health` reports whether the scheduler is running and its last pass status.
+
+## Physics Expected-State Model
+
+The product calls this component the Digital Twin; code and API names use
+"Expected-State Model" to keep it distinct from the ML model. The active mine
+type is selected once in `config/mine_geometry.json`.
+
+- `POST /expected-state/state` — Longwall Monitoring Mode. It compares the
+  independent PIM/Knothe expected field with baseline-relative cumulative
+  displacement supplied by the caller.
+- `POST /expected-state/whatif` — Longwall Planning Mode. Supply node local
+  metre positions, `future_time_days`, and optionally `geometry_override` for a
+  different hypothetical panel. Its response is always `is_hypothetical: true`.
+- `POST /expected-state/bord-and-pillar/state` — deterministic CPHSR/pillar
+  structural state using the configured prototype or surveyed B&P geometry.
+- `POST /expected-state/bord-and-pillar/whatif` — B&P susceptibility projection
+  for a hypothetical extraction percentage; it is not an mm-deformation field.
+- `POST /risk-synthesis` — combines exactly two 0–1 inputs into one Risk Score
+  and returns a separate agreement badge.
+- `POST /expected-state/panel-aggregation` — conservatively rolls node scores
+  into a Longwall panel score.
+- `GET /expected-state/context` — currently returns explicitly simulated
+  geology priors. It is not Earth Engine data.
+
+The scheduler writes Longwall Monitoring Mode to `twin_state` only after all
+of the following exist: the proposed SQL schema, a node baseline, `mine_x_m` /
+`mine_y_m` coordinates in the configured local CRS, and a displacement reading.
+It skips incomplete registrations rather than inventing values. Pairwise InSAR
+LOS displacement is retained as a side observation; it is not cumulative and
+does not enter the Physics Deviation Index.
+
+Before applying database changes, review
+`config/supabase_expected_state_schema.sql` against the live Supabase schema.
+Every current development placeholder is recorded in `ASSUMPTIONS.md`.

@@ -50,15 +50,6 @@ def get_pipeline(mine_type: str) -> tuple[ExpectedStateEngine, ResidualModel]:
         raise ValueError(f"unsupported or incomplete mine type: {mine_type}") from error
 
 
-class PrototypeResidualModel:
-    """Explicit placeholder until each mine type's residual model is implemented."""
-    def __init__(self, mine_type: str) -> None:
-        self.mine_type = mine_type
-
-    def predict(self, *args: Any, **kwargs: Any) -> Any:
-        raise NotImplementedError(f"{self.mine_type} residual model is not implemented yet")
-
-
 class BordAndPillarExpectedStateStub:
     """Dispatch-safe placeholder; CPHSR and pillar mechanics are a later phase."""
     def monitoring_mode(self, *args: Any, **kwargs: Any) -> Any:
@@ -73,8 +64,9 @@ class BordAndPillarExpectedStateStub:
 from pignn.expected_state.bord_and_pillar import BordAndPillarExpectedStateEngine
 from pignn.expected_state.longwall import LongwallExpectedStateEngine
 from pignn.model.gp_residual import GPResidualModel
+from pignn.model.longwall_pignn import LongwallPIGNNModel
 
 register_expected_state("longwall")(LongwallExpectedStateEngine)
-register_model("longwall")(lambda: PrototypeResidualModel("longwall"))
+register_model("longwall")(LongwallPIGNNModel)
 register_expected_state("bord_and_pillar")(BordAndPillarExpectedStateEngine)
 register_model("bord_and_pillar")(GPResidualModel)

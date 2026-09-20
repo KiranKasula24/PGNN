@@ -80,6 +80,17 @@ def safety_factor(pillar_width_m: float, gallery_width_m: float, depth_m: float,
     return PillarState("", stress, strength, strength / stress, strength / stress < 1.0)
 
 
+def structural_risk_from_safety_factor(safety_factor_value: float, safe_safety_factor: float = 1.5) -> float:
+    """Map failure margin to risk; safe pillars must not retain raw 1/SF risk."""
+    if safety_factor_value < 0 or safe_safety_factor <= 1:
+        raise ValueError("safety factors must be non-negative and safe threshold must exceed one")
+    if safety_factor_value <= 1:
+        return 1.0
+    if safety_factor_value >= safe_safety_factor:
+        return 0.0
+    return 1.0 - (safety_factor_value - 1.0) / (safe_safety_factor - 1.0)
+
+
 def cascading_redistribution(pillars: Iterable[Pillar], depth_m: float, intact_strength_mpa: float, unit_weight_mpa_per_m: float, max_iterations: int = 100) -> list[PillarState]:
     """Redistribute a failed pillar's tributary load over its nonfailed neighbours."""
     by_id = {pillar.pillar_id: pillar for pillar in pillars}
@@ -116,9 +127,14 @@ class BordAndPillarExpectedStateEngine:
     def monitoring_mode(self, params: CPHSRParameters, pillars: Iterable[Pillar], depth_m: float, intact_strength_mpa: float, unit_weight_mpa_per_m: float) -> BordAndPillarMonitoringResult:
         cphsr = cphsr_score(params)
         states = cascading_redistribution(pillars, depth_m, intact_strength_mpa, unit_weight_mpa_per_m)
-        pillar_risk = max((min(1.0, 1.0 / max(state.safety_factor, 1e-12)) for state in states), default=0.0)
+        pillar_risk = max((structural_risk_from_safety_factor(state.safety_factor) for state in states), default=0.0)
         return BordAndPillarMonitoringResult(cphsr, states, max(cphsr.score_0_to_1, pillar_risk))
 
-    def planning_mode(self, params: CPHSRParameters, pillars: Iterable[Pillar], depth_m: float, intact_strength_mpa: float, unit_weight_mpa_per_m: float) -> BordAndPillarMonitoringResult:
+    def planning_mode(self, params: CPHSRParameters, pillars: Iterable[Pillar], depth_m: float, intact_strength_mpa: float, unit_weight_mpa_per_m: float, hypothetical_extraction_percent: float) -> BordAndPillarMonitoringResult:
+        if not 0 <= hypothetical_extraction_percent <= 1:
+            raise ValueError("hypothetical_extraction_percent must be in [0, 1]")
         result = self.monitoring_mode(params, pillars, depth_m, intact_strength_mpa, unit_weight_mpa_per_m)
-        return BordAndPillarMonitoringResult(result.cphsr, result.pillars, result.combined_structural_risk_0_to_1, is_hypothetical=True)
+        # Temporary linear extraction-state projection; replace when CPHSR's
+        # verified mining-state relationship is available.
+        projected_risk = min(1.0, result.combined_structural_risk_0_to_1 * hypothetical_extraction_percent / 0.55)
+        return BordAndPillarMonitoringResult(result.cphsr, result.pillars, projected_risk, is_hypothetical=True)

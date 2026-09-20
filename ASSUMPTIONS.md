@@ -81,6 +81,13 @@ continues to carry an explicit `coefficients_verified: false` or
 - **Replacement:** apply the migration through the backend team's normal
   Supabase migration process, then confirm RLS and service-role permissions.
 
+- **Scheduler coordinates:** automatic Longwall monitoring requires
+  `nodes.mine_x_m` and `nodes.mine_y_m` in the same local-metre coordinate
+  system as `mine_geometry.json`. The existing mock latitude/longitude fields
+  are deliberately not converted silently, because a mine CRS/origin has not
+  been supplied. Nodes without these fields, a baseline, or a displacement
+  reading are skipped rather than generating a misleading Twin row.
+
 ## InSAR database contract needed by the Expected-State Model
 
 The InSAR team may write through the backend; no direct call to this service is
@@ -123,6 +130,21 @@ comparison until the InSAR team publishes a common-reference cumulative series.
   `≤0.50 = mixed`, otherwise `disagreeing`. This badge is intentionally
   separate from risk colour and must not alter the Risk Score.
 
+## Bord-and-Pillar safety-factor risk calibration
+
+- **Safe safety factor:** `SF >= 1.50` maps to a pillar contribution of `0`.
+  A failed pillar (`SF <= 1`) maps to `1`. Between those values, the prototype
+  uses a linear margin mapping: `1 - (SF - 1) / (1.5 - 1)`.
+- **Why:** raw `1/SF` over-alarmed the supplied prototype geometry: an intact
+  `SF=1.248` became `0.801`, falsely crossing the emergency action threshold.
+- **Replacement:** confirm the mine's accepted design safety factor and its
+  action thresholds with a qualified geotechnical/mining engineer.
+
+- **Bord-and-Pillar planning:** the hypothetical extraction-percent endpoint
+  linearly scales the current structural risk relative to the assumed current
+  `55%` extraction. This is only a placeholder until verified CPHSR/mining-state
+  relationships are available.
+
 ## Panel aggregation prototype policy
 
 - Node-to-panel association uses the rectangular panel boundary expanded by
@@ -131,3 +153,10 @@ comparison until the InSAR team publishes a common-reference cumulative series.
 - Panel severity is the **maximum** severity among associated nodes. This is a
   conservative prototype policy: a panel score must not hide its worst node.
   It may be replaced by a validated exposure-aware or weighted policy later.
+
+## Planning Mode geometry overrides
+
+- A what-if request may override any Longwall panel geometry/physics field and
+  runs only in memory. It is never written to `twin_state` or live risk tables.
+- Any number supplied by a user in such a request is a scenario input, not a
+  surveyed fact. The API response remains `is_hypothetical: true`.

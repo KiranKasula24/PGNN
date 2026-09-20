@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from .longwall import LongwallGeometry
+from .bord_and_pillar import CPHSRParameters, Pillar
 
 
 DEFAULT_MINE_GEOMETRY = Path(__file__).resolve().parents[3] / "config" / "mine_geometry.json"
@@ -36,3 +37,14 @@ def longwall_geometry_from_config(config: dict) -> LongwallGeometry:
         current_face_position_m=None if raw.get("current_face_position_m") is None else float(raw["current_face_position_m"]),
         uncertainty_band_mm=float(raw["uncertainty_band_mm"]), orientation_deg=float(raw.get("orientation_deg", 0.0)),
     )
+
+
+def bord_and_pillar_inputs_from_config(config: dict) -> tuple[CPHSRParameters, list[Pillar], float, float, float]:
+    raw = config["bord_and_pillar"]
+    params = CPHSRParameters(
+        rock_to_soil_ratio=float(raw["rock_to_soil_ratio"]), depth_m=float(raw["depth_m"]),
+        extraction_height_m=float(raw["seam_thickness_m"]), brittleness_index=float(raw["brittleness_index"]),
+        rock_density_kg_m3=float(raw["rock_density_kg_m3"]),
+    )
+    pillars = [Pillar(item["pillar_id"], float(item["width_m"]), float(item["gallery_width_m"]), tuple(item["adjacent_pillar_ids"])) for item in raw["pillars"]]
+    return params, pillars, float(raw["depth_m"]), float(raw["intact_strength_mpa"]), float(raw["unit_weight_mpa_per_m"])

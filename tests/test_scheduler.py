@@ -5,7 +5,7 @@ import json
 import pytest
 
 from pignn.expected_state.longwall import LongwallMonitoringResult, LongwallNodeState
-from pignn.service.scheduler import ONE_MINUTE_SECONDS, PredictionScheduler, SupabaseClient, SupabaseSettings, build_prediction_requests
+from pignn.service.scheduler import ONE_MINUTE_SECONDS, PredictionScheduler, SupabaseClient, SupabaseSettings, build_longwall_monitoring_state, build_prediction_requests
 from pignn.service.schemas import Prediction, TimeToThreshold, ZoneEntry
 
 NODES = [{"node_id": 7, "site_id": "alpha", "mock_latitude": 20.0, "mock_longitude": 80.0}]
@@ -107,3 +107,13 @@ def test_supabase_client_persists_monitoring_state_but_refuses_hypothetical_stat
     assert json.loads(captured["request"].data)[0]["physics_deviation_index"] == 0.02
     with pytest.raises(ValueError):
         client.insert_longwall_expected_state(LongwallMonitoringResult(result.panel_id, result.computed_at, result.parameter_basis, result.nodes, is_hypothetical=True))
+
+
+def test_monitoring_state_requires_registration_baseline_and_current_displacement():
+    nodes = [{"node_id": 7, "mine_x_m": 0.0, "mine_y_m": -100.0}]
+    readings = [{"node_id": 7, "recorded_at": "2026-01-01T00:00:00+00:00", "displacement_filt": 15.0}]
+    baselines = [{"node_id": 7, "baseline_displacement_mm": 12.0}]
+    result = build_longwall_monitoring_state(nodes, readings, baselines, datetime(2026, 1, 1, tzinfo=timezone.utc))
+    assert result is not None
+    assert result.nodes[0].observed_cumulative_displacement_mm == 3.0
+    assert build_longwall_monitoring_state([{"node_id": 7}], readings, baselines) is None

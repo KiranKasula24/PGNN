@@ -14,6 +14,8 @@ from urllib.error import HTTPError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
+from pignn.expected_state.config import load_mine_geometry, longwall_geometry_from_config
+from pignn.expected_state.longwall import LongwallExpectedStateEngine
 from pignn.expected_state.longwall import LongwallMonitoringResult
 from .schemas import FeatureSample, NodeInput, NodeReading, Prediction, PredictionRequest
 
@@ -175,6 +177,43 @@ def build_prediction_requests(nodes: list[dict[str, Any]], readings: list[dict[s
     return [PredictionRequest(site_id=site_id, nodes=site_nodes) for site_id, site_nodes in sites.items()]
 
 
+def build_longwall_monitoring_state(nodes: list[dict[str, Any]], readings: list[dict[str, Any]], baselines: list[dict[str, Any]], as_of: datetime | None = None) -> LongwallMonitoringResult | None:
+    """Build a live expected-state result only for fully registered nodes.
+
+    Pairwise InSAR LOS values are intentionally not used here: the comparison
+    requires baseline-relative cumulative displacement in the same units.
+    """
+    config = load_mine_geometry()
+    if config["mine_type"] != "longwall":
+        return None
+    baseline_by_node = {int(row["node_id"]): float(row["baseline_displacement_mm"]) for row in baselines if row.get("node_id") is not None and row.get("baseline_displacement_mm") is not None}
+    positions: dict[int, tuple[float, float]] = {}
+    observed: dict[int, float] = {}
+    latest_by_node: dict[int, dict[str, Any]] = {}
+    for row in readings:
+        if row.get("node_id") is None:
+            continue
+        node_id = int(row["node_id"])
+        timestamp = str(row.get("recorded_at") or row.get("timestamp") or "")
+        if node_id not in latest_by_node or timestamp > str(latest_by_node[node_id].get("recorded_at") or latest_by_node[node_id].get("timestamp") or ""):
+            latest_by_node[node_id] = row
+    for node in nodes:
+        node_id = int(node["node_id"])
+        if node_id not in baseline_by_node or node.get("mine_x_m") is None or node.get("mine_y_m") is None:
+            continue
+        reading = latest_by_node.get(node_id)
+        if reading is None:
+            continue
+        current_displacement = _value(reading, "displacement_filt", "displacement", "filt")
+        if current_displacement is None:
+            continue
+        positions[node_id] = (float(node["mine_x_m"]), float(node["mine_y_m"]))
+        observed[node_id] = float(current_displacement) - baseline_by_node[node_id]
+    if not positions:
+        return None
+    return LongwallExpectedStateEngine().monitoring_mode(longwall_geometry_from_config(config), positions, observed, as_of or datetime.now(timezone.utc))
+
+
 class PredictionScheduler:
     """Cancellable periodic pass; it has no queue, job table, or upstream trigger."""
     def __init__(self, client: SupabaseClient, predict: Callable[[PredictionRequest], Prediction], interval_seconds: int = ONE_MINUTE_SECONDS) -> None:
@@ -192,6 +231,11 @@ class PredictionScheduler:
             for request in build_prediction_requests(nodes, readings, insar_rows):
                 prediction = await asyncio.to_thread(self.predict, request)
                 await asyncio.to_thread(self.client.insert_prediction, request.site_id, prediction)
+            baseline_reader = getattr(self.client, "baseline_rows", None)
+            baselines = await asyncio.to_thread(baseline_reader) if baseline_reader else []
+            monitoring = await asyncio.to_thread(build_longwall_monitoring_state, nodes, readings, baselines)
+            if monitoring is not None:
+                await asyncio.to_thread(self.client.insert_longwall_expected_state, monitoring)
         except Exception as error:
             self.last_error = str(error)
             raise
