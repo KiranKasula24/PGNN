@@ -83,25 +83,37 @@ def train_validation_split(graphs: list[Data], epochs: int = 20, learning_rate: 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     positives = sum(float(graph.y.item()) for graph in train_graphs)
     loss_fn = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(max(1.0, (len(train_graphs) - positives) / max(positives, 1))))
-    for _ in range(epochs):
-        model.train()
-        for start in range(0, len(train_graphs), batch_size):
-            batch = Batch.from_data_list(train_graphs[start:start + batch_size])
-            optimizer.zero_grad()
-            node_logits, graph_logits, normalized_rate = model(batch)
-            # Index 3 is displacement_filt in the frozen default registry.
-            displacement = batch.x[:, :, 3]
-            target_rate = torch.diff(displacement, dim=1, prepend=displacement[:, :1]) / model.rate_scale_mm_per_day
-            valid = batch.feature_mask[:, :, 3]
-            rate_loss = (((normalized_rate - target_rate) ** 2) * valid).sum() / valid.sum().clamp_min(1)
-            node_loss = _node_severity_loss(node_logits, batch.node_y)
-            loss = loss_fn(graph_logits, batch.y.flatten()) + node_loss + 0.1 * rate_loss
-            loss.backward(); optimizer.step()
+    def batch_loss(batch: Batch) -> torch.Tensor:
+        node_logits, graph_logits, normalized_rate = model(batch)
+        # Index 3 is displacement_filt in the frozen default registry.
+        displacement = batch.x[:, :, 3]
+        target_rate = torch.diff(displacement, dim=1, prepend=displacement[:, :1]) / model.rate_scale_mm_per_day
+        valid = batch.feature_mask[:, :, 3]
+        rate_loss = (((normalized_rate - target_rate) ** 2) * valid).sum() / valid.sum().clamp_min(1)
+        node_loss = _node_severity_loss(node_logits, batch.node_y)
+        return loss_fn(graph_logits, batch.y.flatten()) + node_loss + 0.1 * rate_loss
+
     def evaluate(items: list[Data]) -> float:
         model.eval(); losses = []
         with torch.no_grad():
             for start in range(0, len(items), batch_size):
                 batch = Batch.from_data_list(items[start:start + batch_size])
-                losses.append(float(loss_fn(model(batch)[1], batch.y.flatten())))
+                losses.append(float(batch_loss(batch)))
         return sum(losses) / len(losses)
-    return model, {"train_loss": evaluate(train_graphs), "validation_loss": evaluate(validation_graphs) if validation_graphs else evaluate(train_graphs)}
+
+    initial_train_loss = evaluate(train_graphs)
+    training_loss_by_epoch: list[float] = []
+    for _ in range(epochs):
+        model.train()
+        for start in range(0, len(train_graphs), batch_size):
+            batch = Batch.from_data_list(train_graphs[start:start + batch_size])
+            optimizer.zero_grad()
+            loss = batch_loss(batch)
+            loss.backward(); optimizer.step()
+        training_loss_by_epoch.append(evaluate(train_graphs))
+    return model, {
+        "initial_train_loss": initial_train_loss,
+        "train_loss": evaluate(train_graphs),
+        "validation_loss": evaluate(validation_graphs) if validation_graphs else evaluate(train_graphs),
+        "training_loss_by_epoch": training_loss_by_epoch,
+    }

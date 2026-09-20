@@ -1,6 +1,30 @@
 from datetime import datetime, timezone
+
+import pytest
+import torch
 from fastapi.testclient import TestClient
+from pignn.features.registry import DEFAULT_REGISTRY
+from pignn.model.pignn import PIGNN
+from pignn.service.inference import load_default_inference
 from pignn.service.main import app
+
+
+@pytest.fixture(autouse=True)
+def isolated_checkpoint(tmp_path, monkeypatch):
+    """Keep endpoint-contract tests independent of ignored deployment artifacts."""
+    checkpoint = tmp_path / "pignn-test.pt"
+    model = PIGNN(len(DEFAULT_REGISTRY.names))
+    torch.save({
+        "model_state_dict": model.state_dict(),
+        "feature_count": len(DEFAULT_REGISTRY.names),
+        "hidden_size": 32,
+        "window_size": 8,
+        "model_version": "pignn-0.1.1",
+    }, checkpoint)
+    monkeypatch.setenv("PIGNN_CHECKPOINT", str(checkpoint))
+    load_default_inference.cache_clear()
+    yield
+    load_default_inference.cache_clear()
 
 
 def test_predict_contract_is_stable():

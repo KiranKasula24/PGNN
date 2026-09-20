@@ -14,6 +14,7 @@ from urllib.error import HTTPError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
+from pignn.expected_state.longwall import LongwallMonitoringResult
 from .schemas import FeatureSample, NodeInput, NodeReading, Prediction, PredictionRequest
 
 logger = logging.getLogger(__name__)
@@ -89,6 +90,27 @@ class SupabaseClient:
             "generated_at": datetime.now(timezone.utc).isoformat(),
         }, prefer="return=minimal")
 
+    def baseline_rows(self) -> list[dict[str, Any]]:
+        """Read one-time GNSS-registration baselines once the proposed table exists."""
+        return self._request("GET", "node_baseline?select=*") or []
+
+    def insert_longwall_expected_state(self, result: LongwallMonitoringResult) -> None:
+        """Persist Monitoring Mode only; Planning Mode is structurally refused."""
+        if result.is_hypothetical:
+            raise ValueError("hypothetical expected-state results must never be persisted")
+        records = [{
+            "node_id": node.node_id,
+            "mine_type": "longwall",
+            "expected_deformation_mm": node.expected_deformation_mm,
+            "observed_cumulative_displacement_mm": node.observed_cumulative_displacement_mm,
+            "physics_deviation_index": node.physics_deviation_index,
+            "uncertainty_band_mm": result.parameter_basis.get("uncertainty_band_mm"),
+            "parameter_basis": result.parameter_basis,
+            "computed_at": result.computed_at.isoformat(),
+        } for node in result.nodes]
+        if records:
+            self._request("POST", "twin_state", records, prefer="return=minimal")
+
 
 def _value(row: dict[str, Any], flat_name: str, object_name: str, nested_name: str) -> float | None:
     """Read the existing flat DB field or its ingest-contract JSON representation."""
@@ -159,12 +181,23 @@ class PredictionScheduler:
         self.client, self.predict, self.interval_seconds = client, predict, interval_seconds
         self._task: asyncio.Task[None] | None = None
         self._stopping = asyncio.Event()
+        self.last_started_at: datetime | None = None
+        self.last_completed_at: datetime | None = None
+        self.last_error: str | None = None
 
     async def run_once(self) -> None:
-        nodes, readings, insar_rows = await asyncio.to_thread(self.client.source_rows)
-        for request in build_prediction_requests(nodes, readings, insar_rows):
-            prediction = await asyncio.to_thread(self.predict, request)
-            await asyncio.to_thread(self.client.insert_prediction, request.site_id, prediction)
+        self.last_started_at = datetime.now(timezone.utc)
+        try:
+            nodes, readings, insar_rows = await asyncio.to_thread(self.client.source_rows)
+            for request in build_prediction_requests(nodes, readings, insar_rows):
+                prediction = await asyncio.to_thread(self.predict, request)
+                await asyncio.to_thread(self.client.insert_prediction, request.site_id, prediction)
+        except Exception as error:
+            self.last_error = str(error)
+            raise
+        else:
+            self.last_completed_at = datetime.now(timezone.utc)
+            self.last_error = None
 
     async def _run(self) -> None:
         while not self._stopping.is_set():

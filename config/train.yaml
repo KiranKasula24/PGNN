@@ -4,4 +4,4 @@ finetune_learning_rate: 0.0001
 epochs: 3  # CPU smoke-pretraining default; increase on GPU/Colab
 batch_size: 64
 window_size: 8
-model_version: pignn-0.1.0
+model_version: pignn-0.1.1

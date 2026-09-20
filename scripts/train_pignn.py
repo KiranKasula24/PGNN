@@ -15,7 +15,7 @@ parser.add_argument("--model-config", type=Path, default=Path("config/model.yaml
 parser.add_argument("--epochs", type=int)
 parser.add_argument("--window", type=int)
 parser.add_argument("--batch-size", type=int)
-parser.add_argument("--output", type=Path, default=Path("checkpoints/pignn-0.1.0.pt"))
+parser.add_argument("--output", type=Path, default=Path("checkpoints/pignn-0.1.1.pt"))
 parser.add_argument("--model-version", type=str)
 args = parser.parse_args()
 settings = load_yaml(args.config)
@@ -35,4 +35,7 @@ if model_settings["model"] != "pignn_gcn_gru":
 model, metrics = train_validation_split(graphs, epochs=args.epochs, learning_rate=settings["learning_rate"], batch_size=args.batch_size, hidden_size=model_settings["hidden_size"])
 args.output.parent.mkdir(parents=True, exist_ok=True)
 torch.save({"model_state_dict": model.state_dict(), "feature_count": graphs[0].x.shape[-1], "hidden_size": model_settings["hidden_size"], "window_size": args.window, "model_version": model_version, "metrics": metrics, "architecture": "PIM-weighted GCNConv -> GRU"}, args.output)
-print({"checkpoint": str(args.output), "scenarios": len(graphs), **metrics})
+for epoch, loss in enumerate(metrics["training_loss_by_epoch"], start=1):
+    if epoch == 1 or epoch == args.epochs or epoch % 5 == 0:
+        print({"epoch": epoch, "training_loss": loss})
+print({"checkpoint": str(args.output), "scenarios": len(graphs), **{key: value for key, value in metrics.items() if key != "training_loss_by_epoch"}})

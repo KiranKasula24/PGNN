@@ -1,0 +1,49 @@
+{
+  "mine_type": "longwall",
+  "is_assumed": true,
+  "assumption_notice": "All prototype geometry, extraction-state, physics, and uncertainty values in this file are illustrative placeholders. Replace them with surveyed mine plans, production logs, geology priors, and calibrated uncertainty before operational use.",
+  "coordinate_system": "local_meters",
+  "longwall": {
+    "panel_id": "LW-PROTOTYPE-A",
+    "center_x_m": 0.0,
+    "center_y_m": 0.0,
+    "panel_boundary": {"width_m": 200.0, "length_m": 300.0},
+    "depth_m": 200.0,
+    "extraction_thickness_m": 3.0,
+    "method": "longwall",
+    "status": "active",
+    "current_face_position_m": 120.0,
+    "percent_complete": 0.4,
+    "subsidence_factor_a": 0.7,
+    "major_influence_angle_beta_deg": 55.0,
+    "knothe_time_coefficient_c_per_day": 0.015,
+    "extraction_start_date": "2025-01-01T00:00:00+00:00",
+    "uncertainty_band_mm": 100.0,
+    "provenance": {
+      "geometry_and_extraction_state": "assumed prototype values supplied for development",
+      "a_and_beta": "illustrative Indian coal-measure PIM defaults; require geology prior or calibration",
+      "knothe_c": "illustrative site coefficient; requires InSAR physics calibration",
+      "uncertainty_band_mm": "illustrative constant until SoilGrids uncertainty propagation is implemented"
+    }
+  },
+  "bord_and_pillar": {
+    "pillar_width_m": 15.0,
+    "gallery_width_m": 4.8,
+    "depth_m": 150.0,
+    "seam_thickness_m": 2.5,
+    "rock_to_soil_ratio": 2.0,
+    "brittleness_index": 0.6,
+    "rock_density_kg_m3": 2500.0,
+    "extraction_percent": 0.55,
+    "pillar_configuration": "square_grid",
+    "goaf_development": "partial",
+    "unit_weight_mpa_per_m": 0.024525,
+    "intact_strength_mpa": 10.0,
+    "pillars": [
+      {"pillar_id": "P1", "width_m": 15.0, "gallery_width_m": 4.8, "adjacent_pillar_ids": ["P2"]},
+      {"pillar_id": "P2", "width_m": 15.0, "gallery_width_m": 4.8, "adjacent_pillar_ids": ["P1", "P3"]},
+      {"pillar_id": "P3", "width_m": 15.0, "gallery_width_m": 4.8, "adjacent_pillar_ids": ["P2"]}
+    ],
+    "provenance": "all fields are assumed prototype placeholders"
+  }
+}

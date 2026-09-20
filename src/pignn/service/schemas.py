@@ -49,3 +49,22 @@ class Prediction(BaseModel):
     trend: Literal["stable", "accelerating", "decelerating"]
     time_to_threshold: TimeToThreshold
     model_version: str
+
+
+class ExpectedStateNodeInput(BaseModel):
+    node_id: int
+    x_m: float
+    y_m: float
+
+
+class ExpectedStateRequest(BaseModel):
+    """Internal backend contract; coordinates are local metres until GNSS CRS lands."""
+    nodes: list[ExpectedStateNodeInput] = Field(min_length=1)
+    observed_cumulative_displacement_mm: dict[int, float] = Field(default_factory=dict)
+    as_of: datetime | None = None
+
+
+class ExpectedStateWhatIfRequest(BaseModel):
+    """Planning-only horizon from a declared extraction start; never live state."""
+    nodes: list[ExpectedStateNodeInput] = Field(min_length=1)
+    future_time_days: Annotated[float, Field(ge=0)]

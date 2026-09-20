@@ -16,11 +16,15 @@ uv run uvicorn pignn.service.main:app --reload
 uv run python scripts/generate_dataset.py --scenarios 1000
 uv run python scripts/visualize_physics.py
 uv run python scripts/train_baseline.py data/synthetic/<dataset>.parquet
-uv run python scripts/train_pignn.py data/synthetic/<dataset>.parquet --epochs 3 --window 8
+uv run python scripts/train_pignn.py data/synthetic/<dataset>.parquet --epochs 60 --window 8
 ```
 
 See the final hand-off notes for the complete test sequence. Synthetic outputs
 are for pipeline development only; they are not real-world accuracy evidence.
+The training command writes `checkpoints/pignn-0.1.1.pt`, the same default file
+loaded by the service. The configured three epochs are only a CPU smoke-test;
+use a meaningful epoch count and compare `initial_train_loss`, `train_loss`,
+and `validation_loss` before deploying a checkpoint.
 
 ## Phase 3 and 4 boundaries
 
@@ -54,3 +58,14 @@ inserts directly into `predictions`; it requires no job or queue table. The
 database column `insar_los_velocity_mm` is treated as the agreed LOS displacement
 for an SLC pair and is passed unchanged into the ML displacement feature. Table
 names can be overridden with `PIGNN_SUPABASE_*_TABLE` environment variables.
+
+Run one persistent service instance to enable the periodic pass:
+
+```powershell
+uv run uvicorn --env-file .env pignn.service.main:app --host 0.0.0.0 --port 8000
+```
+
+It runs immediately at startup and then every 60 seconds. Deploy this command
+as a long-running worker/web service with exactly one process; multiple Uvicorn
+workers each start a scheduler and would create duplicate prediction rows.
+`GET /health` reports whether the scheduler is running and its last pass status.
