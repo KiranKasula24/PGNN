@@ -1,7 +1,7 @@
 mode: pretrain
 learning_rate: 0.001
 finetune_learning_rate: 0.0001
-epochs: 3  # CPU smoke-pretraining default; increase on GPU/Colab
+epochs: 60  # meaningful synthetic pretraining default; use --epochs 3 only for a smoke test
 batch_size: 64
 window_size: 8
 model_version: pignn-0.1.1

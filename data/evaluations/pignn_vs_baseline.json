@@ -1,0 +1,15 @@
+{
+  "dataset": "data\\synthetic\\synthetic_f0394068a360_3000.parquet",
+  "scenarios": 3000,
+  "epochs": 60,
+  "pignn": {
+    "initial_train_loss": 1.5635533332824707,
+    "train_loss": 0.3078261911869049,
+    "validation_loss": 0.3219698667526245
+  },
+  "baseline": {
+    "train_loss": 0.35533007979393005,
+    "validation_loss": 0.36469677090644836
+  },
+  "interpretation": "Lower validation loss is better; synthetic-only comparison is not real-world accuracy evidence."
+}

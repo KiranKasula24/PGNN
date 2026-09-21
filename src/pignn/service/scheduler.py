@@ -131,6 +131,8 @@ def _sensor_features(row: dict[str, Any]) -> dict[str, FeatureSample]:
         # The application-owned source table still uses its pre-rename column.
         # This is a field-name adapter only; the Fuzzy Risk Index value is intact.
         "fuzzy_risk_index": row.get("fuzzy_risk_index", row.get("risk_score")),
+        # Tier-2-derived score; absent remains masked until firmware supplies it.
+        "crack_anomaly_score": row.get("crack_anomaly_score"),
     }
     return {name: FeatureSample(value=value, valid=value is not None) for name, value in fields.items()}
 

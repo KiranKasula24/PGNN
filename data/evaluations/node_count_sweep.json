@@ -1,0 +1,35 @@
+{
+  "checkpoint": "pignn-0.1.1",
+  "results": [
+    {
+      "node_count": 2,
+      "scenarios": 100,
+      "graph_accuracy": 0.96,
+      "node_severity_mae": 0.19253918206319212
+    },
+    {
+      "node_count": 4,
+      "scenarios": 100,
+      "graph_accuracy": 0.96,
+      "node_severity_mae": 0.1870926900114864
+    },
+    {
+      "node_count": 6,
+      "scenarios": 100,
+      "graph_accuracy": 0.96,
+      "node_severity_mae": 0.2051792351466914
+    },
+    {
+      "node_count": 8,
+      "scenarios": 100,
+      "graph_accuracy": 0.98,
+      "node_severity_mae": 0.19143983621615918
+    },
+    {
+      "node_count": 12,
+      "scenarios": 100,
+      "graph_accuracy": 0.97,
+      "node_severity_mae": 0.20030799456561604
+    }
+  ]
+}

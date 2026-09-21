@@ -65,6 +65,9 @@ for _name, _unit in (("tilt_x_filt", "degrees"), ("tilt_y_filt", "degrees"), ("v
     DEFAULT_REGISTRY.register(_name, _unit)(_numeric_field(_name))
 
 
+DEFAULT_REGISTRY.register("crack_anomaly_score", "0_to_1")(_numeric_field("crack_anomaly_score"))
+
+
 @DEFAULT_REGISTRY.register("insar_los_displacement_mm", "mm")
 def _insar_los(reading: dict) -> tuple[float, bool]:
     """Consume only pre-processed InSAR fields and preserve unavailable values."""

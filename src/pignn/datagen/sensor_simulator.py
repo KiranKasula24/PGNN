@@ -55,6 +55,15 @@ def provisional_fuzzy_risk_index(displacement_filt: np.ndarray, times_days: np.n
     return np.clip(np.abs(np.gradient(displacement_filt, times_days)) / 10.0, 0, 1)
 
 
+def provisional_crack_anomaly_score(displacement_filt: np.ndarray, times_days: np.ndarray) -> np.ndarray:
+    """Synthetic Tier-2 proxy; replace with calibrated field-sensor rules."""
+    severity = np.clip(np.abs(displacement_filt) / 100.0, 0, 1)
+    resistivity_drop = severity
+    moisture_rise = np.clip(0.15 + 0.65 * severity, 0, 1)
+    temperature_drift = np.clip(np.abs(np.gradient(displacement_filt, times_days)) / 8.0, 0, 1)
+    return np.clip(0.30 * resistivity_drop + 0.25 * moisture_rise + 0.25 * temperature_drift + 0.20 * 0.5, 0, 1)
+
+
 def simulate_node_readings(field_by_time_mm: np.ndarray, times_days: np.ndarray, noise: SensorNoise, rng: np.random.Generator) -> dict[str, np.ndarray]:
     """Create named Tier-1 sensor readings for one node, preserving extension points."""
     specifications = (("displacement_filt", noise.displacement_mm_std), ("tilt_x_filt", noise.tilt_deg_std), ("tilt_y_filt", noise.tilt_deg_std), ("vibration_filt", noise.vibration_std))
@@ -65,4 +74,5 @@ def simulate_node_readings(field_by_time_mm: np.ndarray, times_days: np.ndarray,
         values[filtered_name.replace("_filt", "_raw")] = raw
         values[filtered_name] = filter_1d(raw, KalmanTuning(process_variance=standard_deviation ** 2 * 0.05, measurement_variance=standard_deviation ** 2))
     values["fuzzy_risk_index"] = provisional_fuzzy_risk_index(values["displacement_filt"], times_days)
+    values["crack_anomaly_score"] = provisional_crack_anomaly_score(values["displacement_filt"], times_days)
     return values

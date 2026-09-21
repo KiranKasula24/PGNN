@@ -16,15 +16,27 @@ uv run uvicorn pignn.service.main:app --reload
 uv run python scripts/generate_dataset.py --scenarios 1000
 uv run python scripts/visualize_physics.py
 uv run python scripts/train_baseline.py data/synthetic/<dataset>.parquet
-uv run python scripts/train_pignn.py data/synthetic/<dataset>.parquet --epochs 60 --window 8
+uv run python scripts/train_pignn.py data/synthetic/<dataset>.parquet --window 8
 ```
 
 See the final hand-off notes for the complete test sequence. Synthetic outputs
 are for pipeline development only; they are not real-world accuracy evidence.
 The training command writes `checkpoints/pignn-0.1.1.pt`, the same default file
-loaded by the service. The configured three epochs are only a CPU smoke-test;
-use a meaningful epoch count and compare `initial_train_loss`, `train_loss`,
+loaded by the service. The configured 60 epochs are the meaningful synthetic
+pretraining default; use `--epochs 3` only for a CPU smoke test and compare `initial_train_loss`, `train_loss`,
 and `validation_loss` before deploying a checkpoint.
+
+After a trained checkpoint is available, run both validation artifacts on the
+same generated dataset:
+
+```powershell
+uv run python scripts/run_ablation.py data/synthetic/<dataset>.parquet --epochs 60
+uv run python scripts/evaluate_node_count_sweep.py --checkpoint checkpoints/pignn-0.1.1.pt
+```
+
+They write JSON reports under `data/evaluations/`. The Crack/Anomaly Score is
+now the eighth registered GNN input. New sensor rows may supply it as
+`crack_anomaly_score`; absent real Tier-2 values remain masked.
 
 ## Phase 3 and 4 boundaries
 

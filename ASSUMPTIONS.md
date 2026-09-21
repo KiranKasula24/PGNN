@@ -160,3 +160,15 @@ comparison until the InSAR team publishes a common-reference cumulative series.
   runs only in memory. It is never written to `twin_state` or live risk tables.
 - Any number supplied by a user in such a request is a scenario input, not a
   surveyed fact. The API response remains `is_hypothetical: true`.
+
+## Crack/Anomaly Score prototype
+
+- **Assumption:** synthetic pretraining derives `crack_anomaly_score` from
+  simulated resistivity decrease, moisture increase, temperature drift, and
+  simulated geology susceptibility. It is an interpretable 0–1 proxy, not
+  evidence of a physical crack.
+- **Replacement:** firmware Tier-2 readings, calibrated geology context, and
+  agreed rule breakpoints must replace this simulation before deployment.
+- **Model consequence:** it is a registered GNN feature. Adding it changes the
+  feature count from seven to eight, so old checkpoints/datasets are
+  incompatible and a full retrain is required.
