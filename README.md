@@ -115,3 +115,20 @@ does not enter the Physics Deviation Index.
 Before applying database changes, review
 `config/supabase_expected_state_schema.sql` against the live Supabase schema.
 Every current development placeholder is recorded in `ASSUMPTIONS.md`.
+
+## Backend authentication and deployment
+
+Every endpoint, including `/health`, requires this header:
+
+```text
+X-GEOARGUS-INTERNAL-KEY: <PIGNN_INTERNAL_API_KEY>
+```
+
+Set `PIGNN_INTERNAL_API_KEY` only in the FastAPI/Cloud Run service and in the
+Next.js backend's server-side environment. Never expose it to the browser.
+
+`Dockerfile` targets Cloud Run on port 8080. The trained checkpoint remains a
+non-versioned binary: deployment must copy the approved
+`pignn-0.1.1.pt` into `checkpoints/` before `docker build`, or mount/download it
+to `PIGNN_CHECKPOINT` before starting Uvicorn. The tracked `.gitkeep` only
+ensures a clean clone can build; it is not a usable model artifact.

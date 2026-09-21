@@ -101,3 +101,73 @@ class RiskSynthesisRequest(BaseModel):
 class PanelAggregationRequest(BaseModel):
     nodes: list[ExpectedStateNodeInput] = Field(min_length=1)
     node_severities: dict[int, Annotated[float, Field(ge=0, le=1)]]
+
+
+class SchedulerHealth(BaseModel):
+    status: Literal["disabled", "running", "error"]
+    interval_seconds: int | None = None
+    last_started_at: datetime | None = None
+    last_completed_at: datetime | None = None
+    last_error: str | None = None
+
+
+class HealthResponse(BaseModel):
+    status: Literal["ok", "degraded"]
+    model_mode: Literal["checkpoint-backed"]
+    scheduler: SchedulerHealth
+
+
+class ExpectedStateNodeResponse(BaseModel):
+    node_id: int
+    expected_deformation_mm: float
+    observed_cumulative_displacement_mm: float | None = None
+    divergence_mm: float | None = None
+    physics_deviation_index: Annotated[float | None, Field(ge=0, le=1)] = None
+
+
+class LongwallExpectedStateResponse(BaseModel):
+    panel_id: str
+    computed_at: datetime
+    parameter_basis: dict[str, float | str]
+    nodes: list[ExpectedStateNodeResponse]
+    is_hypothetical: bool
+
+
+class GeologyContextResponse(BaseModel):
+    context: dict[str, float | str]
+    longwall_priors: dict[str, float | str]
+
+
+class CPHSRResponse(BaseModel):
+    score_0_to_1: Annotated[float, Field(ge=0, le=1)]
+    coefficients_verified: bool
+    weights: tuple[float, float, float, float]
+
+
+class PillarStateResponse(BaseModel):
+    pillar_id: str
+    stress_mpa: float
+    strength_mpa: float
+    safety_factor: float
+    failed: bool
+
+
+class BordAndPillarStateResponse(BaseModel):
+    cphsr: CPHSRResponse
+    pillars: list[PillarStateResponse]
+    combined_structural_risk_0_to_1: Annotated[float, Field(ge=0, le=1)]
+    is_hypothetical: bool
+
+
+class RiskSynthesisResponse(BaseModel):
+    risk_score: Annotated[float, Field(ge=0, le=1)]
+    recommended_action: Literal["monitor", "inspect", "restrict_access", "emergency_review"]
+    confidence_badge: Literal["agreeing", "mixed", "disagreeing"]
+    low_days: float | None = None
+    high_days: float | None = None
+
+
+class PanelAggregationResponse(BaseModel):
+    panel_id: str
+    node_ids: list[int]
+    severity_0_to_1: Annotated[float, Field(ge=0, le=1)]

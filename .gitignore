@@ -4,6 +4,7 @@ __pycache__/
 .pytest_cache/
 data/synthetic/*.parquet
 data/synthetic/*.jsonl
-checkpoints/
+checkpoints/*
+!checkpoints/.gitkeep
 .env
 *.png

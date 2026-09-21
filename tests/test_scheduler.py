@@ -5,6 +5,7 @@ import json
 import pytest
 
 from pignn.expected_state.longwall import LongwallMonitoringResult, LongwallNodeState
+from pignn.risk_synthesis import synthesize
 from pignn.service.scheduler import ONE_MINUTE_SECONDS, PredictionScheduler, SupabaseClient, SupabaseSettings, build_longwall_monitoring_state, build_prediction_requests
 from pignn.service.schemas import Prediction, TimeToThreshold, ZoneEntry
 
@@ -20,8 +21,8 @@ class FakeSupabaseClient:
     def source_rows(self):
         return NODES, READINGS, INSAR
 
-    def insert_prediction(self, site_id, prediction):
-        self.inserted.append((site_id, prediction))
+    def insert_prediction(self, site_id, prediction, risk=None):
+        self.inserted.append((site_id, prediction, risk))
 
 
 def test_build_requests_preserves_sensor_and_los_displacement_values():
@@ -110,6 +111,27 @@ def test_supabase_client_persists_monitoring_state_but_refuses_hypothetical_stat
         client.insert_longwall_expected_state(LongwallMonitoringResult(result.panel_id, result.computed_at, result.parameter_basis, result.nodes, is_hypothetical=True))
 
 
+def test_supabase_prediction_insert_includes_synthesized_risk_fields(monkeypatch):
+    captured = {}
+
+    class Response:
+        def __enter__(self): return self
+        def __exit__(self, *_): return False
+        def read(self): return b""
+
+    def fake_urlopen(request, timeout):
+        captured["request"] = request
+        return Response()
+
+    monkeypatch.setattr("pignn.service.scheduler.urlopen", fake_urlopen)
+    client = SupabaseClient(SupabaseSettings(url="https://project.supabase.co", service_role_key="secret"))
+    prediction = Prediction(predicted_zone=[ZoneEntry(node_id=7, severity_0_to_1=0.8)], trend="stable", time_to_threshold=TimeToThreshold(confidence=0.5), model_version="test")
+    client.insert_prediction("alpha", prediction, synthesize(0.8, 0.2))
+    payload = json.loads(captured["request"].data)
+    assert payload["risk_score"] == pytest.approx(0.84)
+    assert payload["confidence_badge"] == "disagreeing"
+
+
 def test_monitoring_state_requires_registration_baseline_and_current_displacement():
     nodes = [{"node_id": 7, "mine_x_m": 0.0, "mine_y_m": -100.0}]
     readings = [{"node_id": 7, "recorded_at": "2026-01-01T00:00:00+00:00", "displacement_filt": 15.0}]
@@ -118,3 +140,31 @@ def test_monitoring_state_requires_registration_baseline_and_current_displacemen
     assert result is not None
     assert result.nodes[0].observed_cumulative_displacement_mm == 3.0
     assert build_longwall_monitoring_state([{"node_id": 7}], readings, baselines) is None
+
+
+def test_scheduler_synthesizes_and_persists_risk_after_prediction_and_twin_state():
+    class CompleteClient:
+        def __init__(self):
+            self.predictions = []
+            self.twin_states = []
+
+        def source_rows(self):
+            return ([{"node_id": 7, "site_id": "alpha", "mock_latitude": 20.0, "mock_longitude": 80.0, "mine_x_m": 0.0, "mine_y_m": -100.0}], [{"node_id": 7, "recorded_at": "2026-01-01T00:00:00+00:00", "displacement_filt": 30.0}], [])
+
+        def baseline_rows(self):
+            return [{"node_id": 7, "baseline_displacement_mm": 0.0}]
+
+        def insert_prediction(self, site_id, prediction, risk=None):
+            self.predictions.append((site_id, prediction, risk))
+
+        def insert_longwall_expected_state(self, state):
+            self.twin_states.append(state)
+
+    client = CompleteClient()
+    prediction = Prediction(predicted_zone=[ZoneEntry(node_id=7, severity_0_to_1=0.8)], trend="stable", time_to_threshold=TimeToThreshold(confidence=0.7), model_version="test")
+    asyncio.run(PredictionScheduler(client, lambda _: prediction).run_once())
+    assert len(client.twin_states) == 1
+    risk = client.predictions[0][2]
+    assert risk is not None
+    assert 0 <= risk.risk_score <= 1
+    assert risk.confidence_badge in {"agreeing", "mixed", "disagreeing"}

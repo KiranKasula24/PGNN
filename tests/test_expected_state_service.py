@@ -17,7 +17,7 @@ def test_expected_state_monitoring_and_whatif_are_separate_contracts():
         "observed_cumulative_displacement_mm": {"1": 0.0},
         "as_of": "2026-01-01T00:00:00Z",
     }
-    client = TestClient(app)
+    client = TestClient(app, headers={"X-GEOARGUS-INTERNAL-KEY": "test-internal-key"})
     monitoring = client.post("/expected-state/state", json=payload)
     hypothetical = client.post("/expected-state/whatif", json={
         "nodes": payload["nodes"], "future_time_days": 365,
@@ -35,7 +35,7 @@ def test_expected_state_monitoring_and_whatif_are_separate_contracts():
 
 
 def test_bord_and_pillar_risk_and_panel_routes_are_http_reachable():
-    client = TestClient(app)
+    client = TestClient(app, headers={"X-GEOARGUS-INTERNAL-KEY": "test-internal-key"})
     structural = client.post("/expected-state/bord-and-pillar/state")
     hypothetical = client.post("/expected-state/bord-and-pillar/whatif", json={"hypothetical_extraction_percent": 0.7})
     synthesis = client.post("/risk-synthesis", json={"risk_input_a": 0.8, "risk_input_b": 0.1})

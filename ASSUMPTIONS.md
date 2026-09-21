@@ -81,6 +81,18 @@ continues to carry an explicit `coefficients_verified: false` or
 - **Replacement:** apply the migration through the backend team's normal
   Supabase migration process, then confirm RLS and service-role permissions.
 
+## Deployment checkpoint and internal authentication
+
+- **Checkpoint delivery:** `pignn-0.1.1.pt` is intentionally gitignored. The
+  deployment pipeline must inject the approved artifact into `checkpoints/`
+  before building the container, or make it available at `PIGNN_CHECKPOINT` at
+  startup. A clean clone contains only `checkpoints/.gitkeep` and cannot serve
+  `/predict` until the artifact is supplied.
+- **Internal API key:** all Python service routes require the server-side
+  `PIGNN_INTERNAL_API_KEY` through `X-GEOARGUS-INTERNAL-KEY`. It is a
+  prototype shared-secret mechanism; migrate to Cloud Run IAM/service identity
+  when the GCP deployment and backend identity are available.
+
 - **Scheduler coordinates:** automatic Longwall monitoring requires
   `nodes.mine_x_m` and `nodes.mine_y_m` in the same local-metre coordinate
   system as `mine_geometry.json`. The existing mock latitude/longitude fields

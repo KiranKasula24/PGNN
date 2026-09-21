@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import json
+import os
 from pathlib import Path
 
 from .longwall import LongwallGeometry
@@ -12,8 +13,9 @@ from .bord_and_pillar import CPHSRParameters, Pillar
 DEFAULT_MINE_GEOMETRY = Path(__file__).resolve().parents[3] / "config" / "mine_geometry.json"
 
 
-def load_mine_geometry(path: str | Path = DEFAULT_MINE_GEOMETRY) -> dict:
-    with Path(path).open(encoding="utf-8") as source:
+def load_mine_geometry(path: str | Path | None = None) -> dict:
+    resolved = Path(path or os.getenv("PIGNN_MINE_GEOMETRY_PATH", DEFAULT_MINE_GEOMETRY))
+    with resolved.open(encoding="utf-8") as source:
         geometry = json.load(source)
     if geometry.get("mine_type") not in {"longwall", "bord_and_pillar"}:
         raise ValueError("mine_geometry.json has an unsupported mine_type")

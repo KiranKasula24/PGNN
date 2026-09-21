@@ -17,6 +17,7 @@ from urllib.request import Request, urlopen
 from pignn.expected_state.config import load_mine_geometry, longwall_geometry_from_config
 from pignn.expected_state.longwall import LongwallExpectedStateEngine
 from pignn.expected_state.longwall import LongwallMonitoringResult
+from pignn.risk_synthesis import RiskSynthesisResult, synthesize
 from .schemas import FeatureSample, NodeInput, NodeReading, Prediction, PredictionRequest
 
 logger = logging.getLogger(__name__)
@@ -81,7 +82,7 @@ class SupabaseClient:
             self._request("GET", f"{insar}?select=*&order=raster_date.desc&limit={limit}") or [],
         )
 
-    def insert_prediction(self, site_id: str, prediction: Prediction) -> None:
+    def insert_prediction(self, site_id: str, prediction: Prediction, risk: RiskSynthesisResult | None = None) -> None:
         table = quote(self.settings.predictions_table, safe="_")
         threshold = prediction.time_to_threshold
         self._request("POST", table, {
@@ -89,6 +90,8 @@ class SupabaseClient:
             "predicted_zone": [entry.model_dump() for entry in prediction.predicted_zone],
             "trend": prediction.trend, "time_to_threshold_low_days": threshold.low_days,
             "time_to_threshold_high_days": threshold.high_days, "confidence": threshold.confidence,
+            "risk_score": None if risk is None else risk.risk_score,
+            "confidence_badge": None if risk is None else risk.confidence_badge,
             "generated_at": datetime.now(timezone.utc).isoformat(),
         }, prefer="return=minimal")
 
@@ -230,12 +233,21 @@ class PredictionScheduler:
         self.last_started_at = datetime.now(timezone.utc)
         try:
             nodes, readings, insar_rows = await asyncio.to_thread(self.client.source_rows)
+            prediction_runs: list[tuple[PredictionRequest, Prediction]] = []
             for request in build_prediction_requests(nodes, readings, insar_rows):
                 prediction = await asyncio.to_thread(self.predict, request)
-                await asyncio.to_thread(self.client.insert_prediction, request.site_id, prediction)
+                prediction_runs.append((request, prediction))
             baseline_reader = getattr(self.client, "baseline_rows", None)
             baselines = await asyncio.to_thread(baseline_reader) if baseline_reader else []
             monitoring = await asyncio.to_thread(build_longwall_monitoring_state, nodes, readings, baselines)
+            deviation_by_node = {} if monitoring is None else {
+                node.node_id: node.physics_deviation_index for node in monitoring.nodes if node.physics_deviation_index is not None
+            }
+            for request, prediction in prediction_runs:
+                severities = [entry.severity_0_to_1 for entry in prediction.predicted_zone]
+                deviations = [deviation_by_node[node.node_id] for node in request.nodes if node.node_id in deviation_by_node]
+                risk = None if not severities or not deviations else synthesize(max(severities), max(deviations), prediction.time_to_threshold.low_days, prediction.time_to_threshold.high_days)
+                await asyncio.to_thread(self.client.insert_prediction, request.site_id, prediction, risk)
             if monitoring is not None:
                 await asyncio.to_thread(self.client.insert_longwall_expected_state, monitoring)
         except Exception as error:
