@@ -73,6 +73,24 @@ continues to carry an explicit `coefficients_verified: false` or
 
 ## Supabase expected-state schema
 
+**Superseded:** the supplied locked DDL is now mirrored at
+`config/supabase_locked_schema.sql`. It uses `nodes.baseline_displacement_mm`
+and `insar_grid_features/grid_id/los_displacement_mm`; the old provisional
+`node_baseline` and `insar_node_features` names are not part of the live
+contract.
+
+**Temporary spatial assumption:** registered latitude/longitude is projected
+to local metres around the node centroid for the prototype panel. Replace this
+with the surveyed AOI/panel origin after `site_config.panel_boundary` has a
+locked coordinate representation.
+
+**Open schema mapping:** `site_config` is the future live geometry source, but
+the locked DDL does not define the JSON shape of `panel_boundary` or
+`current_face_position`, nor columns for extraction-start time and calibrated
+Longwall `a`, `beta`, and `c`. The service therefore continues to use the
+explicitly-assumed local `mine_geometry.json` for those physics inputs until
+that mapping is agreed. This avoids silently inventing operational geometry.
+
 - **Assumption:** the project currently has no `node_baseline` or `twin_state`
   tables. The repository therefore contains a proposed, **not yet applied** SQL
   migration at `config/supabase_expected_state_schema.sql`.

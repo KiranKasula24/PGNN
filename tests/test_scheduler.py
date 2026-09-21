@@ -9,20 +9,24 @@ from pignn.risk_synthesis import synthesize
 from pignn.service.scheduler import ONE_MINUTE_SECONDS, PredictionScheduler, SupabaseClient, SupabaseSettings, build_longwall_monitoring_state, build_prediction_requests
 from pignn.service.schemas import Prediction, TimeToThreshold, ZoneEntry
 
-NODES = [{"node_id": 7, "site_id": "alpha", "mock_latitude": 20.0, "mock_longitude": 80.0}]
+NODES = [{"node_id": 7, "site_id": "alpha", "latitude": 20.0, "longitude": 80.0, "baseline_displacement_mm": 0.0}]
 READINGS = [{"node_id": 7, "timestamp": "2026-09-11T10:00:00+00:00", "tilt_x_filt": 0.1, "tilt_y_filt": -0.1, "vibration_filt": 0.2, "displacement_filt": 1.2, "fuzzy_risk_index": 0.3, "crack_anomaly_score": 0.4}]
-INSAR = [{"node_id": 7, "mock_latitude": 20.0, "mock_longitude": 80.0, "insar_los_velocity_mm": 2.5, "insar_coherence": 0.9, "raster_date": "2026-09-10"}]
+INSAR = [{"grid_id": "grid-7", "latitude": 20.0, "longitude": 80.0, "los_displacement_mm": 2.5, "coherence": 0.9, "coherence_class": "GOOD", "date_b": "2026-09-10"}]
 
 
 class FakeSupabaseClient:
     def __init__(self) -> None:
         self.inserted = []
+        self.twin_states = []
 
     def source_rows(self):
         return NODES, READINGS, INSAR
 
-    def insert_prediction(self, site_id, prediction, risk=None):
-        self.inserted.append((site_id, prediction, risk))
+    def insert_prediction(self, site_id, prediction, risk=None, panel_id=None):
+        self.inserted.append((site_id, prediction, risk, panel_id))
+
+    def insert_longwall_expected_state(self, site_id, state, grid_ids_by_node=None):
+        self.twin_states.append((site_id, state, grid_ids_by_node))
 
 
 def test_build_requests_preserves_sensor_and_los_displacement_values():
@@ -31,6 +35,14 @@ def test_build_requests_preserves_sensor_and_los_displacement_values():
     assert request.nodes[0].readings[0].features["insar_los_displacement_mm"].value == 2.5
     assert request.nodes[0].readings[1].features["displacement_filt"].value == 1.2
     assert request.nodes[0].readings[1].features["crack_anomaly_score"].value == 0.4
+
+
+def test_low_coherence_grid_displacement_is_masked_not_treated_as_zero():
+    low = [{"grid_id": "grid-7", "latitude": 20.0, "longitude": 80.0, "los_displacement_mm": 2.5, "coherence": 0.1, "coherence_class": "LOW", "date_b": "2026-09-10"}]
+    request = build_prediction_requests(NODES, READINGS, low)[0]
+    sample = request.nodes[0].readings[0].features["insar_los_displacement_mm"]
+    assert sample.value == 2.5
+    assert sample.valid is False
 
 
 def test_scheduler_runs_every_minute_and_writes_directly_to_predictions():
@@ -104,11 +116,13 @@ def test_supabase_client_persists_monitoring_state_but_refuses_hypothetical_stat
         {"a": 0.7, "uncertainty_band_mm": 100.0, "source": "assumed_prototype"},
         [LongwallNodeState(7, 22.0, 20.0, 2.0, 0.02)],
     )
-    client.insert_longwall_expected_state(result)
+    client.insert_longwall_expected_state("alpha", result, {7: "grid-7"})
     assert captured["request"].full_url.endswith("/rest/v1/twin_state")
     assert json.loads(captured["request"].data)[0]["physics_deviation_index"] == 0.02
+    assert json.loads(captured["request"].data)[0]["site_id"] == "alpha"
+    assert json.loads(captured["request"].data)[0]["grid_id"] == "grid-7"
     with pytest.raises(ValueError):
-        client.insert_longwall_expected_state(LongwallMonitoringResult(result.panel_id, result.computed_at, result.parameter_basis, result.nodes, is_hypothetical=True))
+        client.insert_longwall_expected_state("alpha", LongwallMonitoringResult(result.panel_id, result.computed_at, result.parameter_basis, result.nodes, is_hypothetical=True))
 
 
 def test_supabase_prediction_insert_includes_synthesized_risk_fields(monkeypatch):
@@ -133,13 +147,12 @@ def test_supabase_prediction_insert_includes_synthesized_risk_fields(monkeypatch
 
 
 def test_monitoring_state_requires_registration_baseline_and_current_displacement():
-    nodes = [{"node_id": 7, "mine_x_m": 0.0, "mine_y_m": -100.0}]
+    nodes = [{"node_id": 7, "latitude": 20.0, "longitude": 80.0, "baseline_displacement_mm": 12.0}]
     readings = [{"node_id": 7, "recorded_at": "2026-01-01T00:00:00+00:00", "displacement_filt": 15.0}]
-    baselines = [{"node_id": 7, "baseline_displacement_mm": 12.0}]
-    result = build_longwall_monitoring_state(nodes, readings, baselines, datetime(2026, 1, 1, tzinfo=timezone.utc))
+    result = build_longwall_monitoring_state(nodes, readings, datetime(2026, 1, 1, tzinfo=timezone.utc))
     assert result is not None
     assert result.nodes[0].observed_cumulative_displacement_mm == 3.0
-    assert build_longwall_monitoring_state([{"node_id": 7}], readings, baselines) is None
+    assert build_longwall_monitoring_state([{"node_id": 7}], readings) is None
 
 
 def test_scheduler_synthesizes_and_persists_risk_after_prediction_and_twin_state():
@@ -149,16 +162,13 @@ def test_scheduler_synthesizes_and_persists_risk_after_prediction_and_twin_state
             self.twin_states = []
 
         def source_rows(self):
-            return ([{"node_id": 7, "site_id": "alpha", "mock_latitude": 20.0, "mock_longitude": 80.0, "mine_x_m": 0.0, "mine_y_m": -100.0}], [{"node_id": 7, "recorded_at": "2026-01-01T00:00:00+00:00", "displacement_filt": 30.0}], [])
+            return ([{"node_id": 7, "site_id": "alpha", "latitude": 20.0, "longitude": 80.0, "baseline_displacement_mm": 0.0}], [{"node_id": 7, "recorded_at": "2026-01-01T00:00:00+00:00", "displacement_filt": 30.0}], [])
 
-        def baseline_rows(self):
-            return [{"node_id": 7, "baseline_displacement_mm": 0.0}]
+        def insert_prediction(self, site_id, prediction, risk=None, panel_id=None):
+            self.predictions.append((site_id, prediction, risk, panel_id))
 
-        def insert_prediction(self, site_id, prediction, risk=None):
-            self.predictions.append((site_id, prediction, risk))
-
-        def insert_longwall_expected_state(self, state):
-            self.twin_states.append(state)
+        def insert_longwall_expected_state(self, site_id, state, grid_ids_by_node=None):
+            self.twin_states.append((site_id, state, grid_ids_by_node))
 
     client = CompleteClient()
     prediction = Prediction(predicted_zone=[ZoneEntry(node_id=7, severity_0_to_1=0.8)], trend="stable", time_to_threshold=TimeToThreshold(confidence=0.7), model_version="test")

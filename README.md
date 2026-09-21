@@ -112,8 +112,17 @@ It skips incomplete registrations rather than inventing values. Pairwise InSAR
 LOS displacement is retained as a side observation; it is not cumulative and
 does not enter the Physics Deviation Index.
 
-Before applying database changes, review
-`config/supabase_expected_state_schema.sql` against the live Supabase schema.
+The current database source of truth is
+`config/supabase_locked_schema.sql`. It aligns node registration with
+`nodes.latitude`, `nodes.longitude`, and `baseline_displacement_mm`; aligns
+InSAR with `insar_grid_features.grid_id` and `los_displacement_mm`; and aligns
+Twin output with `twin_state.mode` and `observed_value_mm`. The service owns the
+nearest-node-to-grid lookup. Low-coherence grid values are masked, never read
+as zero movement.
+
+Before applying database changes, review the locked schema against the live
+Supabase project and set RLS so only backend/service roles write the configured
+tables.
 Every current development placeholder is recorded in `ASSUMPTIONS.md`.
 
 ## Backend authentication and deployment
